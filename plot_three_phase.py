@@ -9,6 +9,20 @@ RMS power (SNR in dB).  A higher SNR_DB means less noise.
   => noise_std = signal_rms / 10^(SNR_dB / 20)
 
 For a pure sine of amplitude A:  RMS = A / sqrt(2)
+
+Optional features
+-----------------
+NOISE_ENABLED (bool, default True)
+    When False, noise is not added to the waveforms; the "noisy" signal dicts
+    simply reference the clean waveforms and SNR info is omitted from titles
+    and print output.
+
+HARMONICS_ENABLED (bool, default False)
+    When True, additional harmonic components defined in the HARMONICS list are
+    summed into each phase's clean waveform before noise is optionally applied.
+    Each tuple in HARMONICS is (order, relative_amplitude).  The harmonics
+    respect the same per-phase offset as the fundamental (balanced-system
+    convention).  The figure title is annotated with "| Harmonics ON".
 """
 
 import numpy as np
@@ -23,11 +37,19 @@ AMPLITUDE_I = 10        # Peak current  (A)
 POWER_FACTOR_ANGLE = 30 # Degrees current lags voltage (power-factor angle)
 CYCLES = 2              # Number of cycles to display
 SAMPLES = 1000          # Points per plot
+NOISE_ENABLED = True    # Set to False to disable noise injection
 
 # ── Noise parameters (dB) ─────────────────────────────────────────────────────
 SNR_DB_V   = 20.0       # Voltage SNR in dB  (e.g. 20 dB ≈ 10:1 amplitude ratio)
 SNR_DB_I   = 20.0       # Current SNR in dB
 NOISE_SEED = 42         # Random seed for reproducibility (set to None for random)
+
+# ── Harmonic parameters ───────────────────────────────────────────────────────
+HARMONICS_ENABLED = False   # Set to True to add harmonic content to clean waveforms
+HARMONICS = [
+    (3, 0.05),   # 3rd harmonic at 5 % of fundamental
+    (5, 0.03),   # 5th harmonic at 3 % of fundamental
+]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -58,8 +80,9 @@ def snr_db_to_noise_std(amplitude, snr_db):
 NOISE_STD_V = snr_db_to_noise_std(AMPLITUDE_V, SNR_DB_V)
 NOISE_STD_I = snr_db_to_noise_std(AMPLITUDE_I, SNR_DB_I)
 
-print(f"SNR_V = {SNR_DB_V} dB  =>  noise σ_V = {NOISE_STD_V:.4f} V")
-print(f"SNR_I = {SNR_DB_I} dB  =>  noise σ_I = {NOISE_STD_I:.4f} A")
+if NOISE_ENABLED:
+    print(f"SNR_V = {SNR_DB_V} dB  =>  noise σ_V = {NOISE_STD_V:.4f} V")
+    print(f"SNR_I = {SNR_DB_I} dB  =>  noise σ_I = {NOISE_STD_I:.4f} A")
 
 
 # ── Time axis ─────────────────────────────────────────────────────────────────
@@ -84,29 +107,61 @@ def waveform(amplitude, offset_deg, extra_lag_rad=0.0):
     return amplitude * np.sin(omega * t + theta - extra_lag_rad)
 
 
+def waveform_with_harmonics(amplitude, offset_deg, extra_lag_rad=0.0):
+    """Return a waveform array with harmonic content summed in.
+
+    Harmonics are taken from the module-level HARMONICS list.  Each entry is a
+    ``(order, relative_amplitude)`` tuple.  The nth harmonic of a phase with
+    offset ``theta`` is:
+
+        A * rel * sin(n * omega * t + n * theta - n * extra_lag_rad)
+
+    so that balanced-system phase relationships are preserved at every order.
+    """
+    theta = np.deg2rad(offset_deg)
+    signal = amplitude * np.sin(omega * t + theta - extra_lag_rad)
+    for order, rel_amp in HARMONICS:
+        n_omega = order * omega
+        n_theta = order * theta
+        n_lag   = order * extra_lag_rad
+        signal = signal + amplitude * rel_amp * np.sin(
+            n_omega * t + n_theta - n_lag
+        )
+    return signal
+
+
 def add_noise(signal, std):
     """Add Gaussian white noise with the given standard deviation."""
     return signal + rng.normal(loc=0.0, scale=std, size=signal.shape)
 
-# ── Build waveforms ─────────────���─────────────────────────────────────────────
-voltages_clean = {ph: waveform(AMPLITUDE_V, off)         for ph, off in phase_offsets_deg.items()}
-currents_clean = {ph: waveform(AMPLITUDE_I, off, pf_rad) for ph, off in phase_offsets_deg.items()}
+# ── Build waveforms ─────────────────────────────────────────────────────────
+waveform_builder = waveform_with_harmonics if HARMONICS_ENABLED else waveform
+voltages_clean = {ph: waveform_builder(AMPLITUDE_V, off)         for ph, off in phase_offsets_deg.items()}
+currents_clean = {ph: waveform_builder(AMPLITUDE_I, off, pf_rad) for ph, off in phase_offsets_deg.items()}
 
-voltages = {ph: add_noise(voltages_clean[ph], NOISE_STD_V) for ph in phase_offsets_deg}
-currents = {ph: add_noise(currents_clean[ph], NOISE_STD_I) for ph in phase_offsets_deg}
+if NOISE_ENABLED:
+    voltages = {ph: add_noise(voltages_clean[ph], NOISE_STD_V) for ph in phase_offsets_deg}
+    currents = {ph: add_noise(currents_clean[ph], NOISE_STD_I) for ph in phase_offsets_deg}
+else:
+    voltages = voltages_clean
+    currents = currents_clean
 t_ms = t * 1e3   # convert to milliseconds for the x-axis
 
 
 # ── Plot ──────────────────────────────────────────────────────────────────────
 fig = plt.figure(figsize=(14, 10))
-fig.suptitle(
+
+_title = (
     f"Three-Phase Voltage & Current  |  "
     f"f = {FREQUENCY} Hz  |  "
     f"PF angle = {POWER_FACTOR_ANGLE}°  |  "
-    f"Vp = {AMPLITUDE_V} V  |  Ip = {AMPLITUDE_I} A  |  "
-    f"SNR_V = {SNR_DB_V} dB  SNR_I = {SNR_DB_I} dB",
-    fontsize=12, fontweight="bold"
+    f"Vp = {AMPLITUDE_V} V  |  Ip = {AMPLITUDE_I} A"
 )
+if NOISE_ENABLED:
+    _title += f"  |  SNR_V = {SNR_DB_V} dB  SNR_I = {SNR_DB_I} dB"
+if HARMONICS_ENABLED:
+    _title += "  |  Harmonics ON"
+fig.suptitle(_title, fontsize=12, fontweight="bold")
 
 gs = gridspec.GridSpec(3, 1, hspace=0.55)
 
@@ -115,18 +170,28 @@ for idx, phase in enumerate(("A", "B", "C")):
     color = phase_colors[phase]
     offset = phase_offsets_deg[phase]
 
-    # Clean reference (faint) behind noisy waveform
-    ax.plot(t_ms, voltages_clean[phase],
-            color=color, linewidth=1.0, alpha=0.25, zorder=1)
+    # Clean reference (faint) behind noisy waveform — skipped when noise is off
+    if NOISE_ENABLED:
+        ax.plot(t_ms, voltages_clean[phase],
+                color=color, linewidth=1.0, alpha=0.25, zorder=1)
     ax.plot(t_ms, voltages[phase],
             color=color, linewidth=1.5, zorder=2,
-            label=f"Phase {phase} Voltage  (offset {offset}°,  SNR {SNR_DB_V} dB)")
+            label=(
+                f"Phase {phase} Voltage  (offset {offset}°,  SNR {SNR_DB_V} dB)"
+                if NOISE_ENABLED
+                else f"Phase {phase} Voltage  (offset {offset}°)"
+            ))
 
-    ax.plot(t_ms, currents_clean[phase],
-            color=color, linewidth=1.0, alpha=0.25, linestyle="--", zorder=1)
+    if NOISE_ENABLED:
+        ax.plot(t_ms, currents_clean[phase],
+                color=color, linewidth=1.0, alpha=0.25, linestyle="--", zorder=1)
     ax.plot(t_ms, currents[phase],
             color=color, linewidth=1.5, linestyle="--", zorder=2,
-            label=f"Phase {phase} Current  (lag {POWER_FACTOR_ANGLE}°,  SNR {SNR_DB_I} dB)")
+            label=(
+                f"Phase {phase} Current  (lag {POWER_FACTOR_ANGLE}°,  SNR {SNR_DB_I} dB)"
+                if NOISE_ENABLED
+                else f"Phase {phase} Current  (lag {POWER_FACTOR_ANGLE}°)"
+            ))
 
     # Shade between noisy voltage and current
     ax.fill_between(t_ms, voltages[phase], currents[phase],

@@ -34,12 +34,14 @@ SIGNAL_SETS = [
     {
         "label": "Set 1",
         # Per-phase noise toggle and SNR (dB)
-        "enable_noise": {"A": True,  "B": False, "C": False},
-        "snr_db_v":     {"A": 20.0,  "B": 20.0,  "C": 20.0},
-        "snr_db_i":     {"A": 20.0,  "B": 20.0,  "C": 20.0},
+        "enable_noise_v": {"A": True,  "B": False, "C": False},
+        "enable_noise_i": {"A": False,  "B": False, "C": False},
+        "snr_db_v":       {"A": 20.0,  "B": 20.0,  "C": 20.0},
+        "snr_db_i":       {"A": 20.0,  "B": 20.0,  "C": 20.0},
         # Per-phase harmonic toggle and content
         # Each phase maps harmonic order n to (relative_amplitude, phase_deg)
-        "enable_harmonics": {"A": True, "B": False, "C": False},
+        "enable_harmonics_v": {"A": True, "B": False, "C": False},
+        "enable_harmonics_i": {"A": False, "B": False, "C": False},
         "harmonics_v": {
             "A": {3: (0.05,  0), 5: (0.03,  0)},
             "B": {3: (0.05,  0), 5: (0.03,  0)},
@@ -53,10 +55,12 @@ SIGNAL_SETS = [
     },
     {
         "label": "Set 2",
-        "enable_noise": {"A": False,  "B": False, "C": False},
-        "snr_db_v":     {"A": 20.0,  "B": 20.0,  "C": 20.0},
-        "snr_db_i":     {"A": 20.0,  "B": 20.0,  "C": 20.0},
-        "enable_harmonics": {"A": False, "B": False, "C": False},
+        "enable_noise_v": {"A": False,  "B": False, "C": False},
+        "enable_noise_i": {"A": False,  "B": False, "C": False},
+        "snr_db_v":       {"A": 20.0,  "B": 20.0,  "C": 20.0},
+        "snr_db_i":       {"A": 20.0,  "B": 20.0,  "C": 20.0},
+        "enable_harmonics_v": {"A": False, "B": False, "C": False},
+        "enable_harmonics_i": {"A": False, "B": False, "C": False},
         "harmonics_v": {
             "A": {3: (0.05,  0), 5: (0.03,  0)},
             "B": {3: (0.05,  0), 5: (0.03,  0)},
@@ -163,20 +167,25 @@ def build_waveforms():
         result["noise_std_v"] = {}
         result["noise_std_i"] = {}
         for ph in ("A", "B", "C"):
-            if result["enable_noise"][ph]:
+            if result["enable_noise_v"][ph]:
                 result["noise_std_v"][ph] = snr_db_to_noise_std(AMPLITUDE_V, result["snr_db_v"][ph])
-                result["noise_std_i"][ph] = snr_db_to_noise_std(AMPLITUDE_I, result["snr_db_i"][ph])
                 print(f"{result['label']} Phase {ph}: "
-                      f"SNR_V = {result['snr_db_v'][ph]} dB => σ_V = {result['noise_std_v'][ph]:.4f} V, "
-                      f"SNR_I = {result['snr_db_i'][ph]} dB => σ_I = {result['noise_std_i'][ph]:.4f} A")
+                      f"SNR_V = {result['snr_db_v'][ph]} dB => σ_V = {result['noise_std_v'][ph]:.4f} V")
             else:
                 result["noise_std_v"][ph] = 0.0
-                result["noise_std_i"][ph] = 0.0
-                print(f"{result['label']} Phase {ph}: noise disabled")
+                print(f"{result['label']} Phase {ph}: voltage noise disabled")
 
-        harm_v = {ph: result["harmonics_v"][ph] if result["enable_harmonics"][ph] else None
+            if result["enable_noise_i"][ph]:
+                result["noise_std_i"][ph] = snr_db_to_noise_std(AMPLITUDE_I, result["snr_db_i"][ph])
+                print(f"{result['label']} Phase {ph}: "
+                      f"SNR_I = {result['snr_db_i'][ph]} dB => σ_I = {result['noise_std_i'][ph]:.4f} A")
+            else:
+                result["noise_std_i"][ph] = 0.0
+                print(f"{result['label']} Phase {ph}: current noise disabled")
+
+        harm_v = {ph: result["harmonics_v"][ph] if result["enable_harmonics_v"][ph] else None
                   for ph in ("A", "B", "C")}
-        harm_i = {ph: result["harmonics_i"][ph] if result["enable_harmonics"][ph] else None
+        harm_i = {ph: result["harmonics_i"][ph] if result["enable_harmonics_i"][ph] else None
                   for ph in ("A", "B", "C")}
 
         result["voltages"] = {
@@ -228,12 +237,12 @@ def plot(signal_sets):
             color = phase_colors[phase]
             offset = phase_offsets_deg[phase]
 
-            noise_v_tag = f"SNR {s['snr_db_v'][phase]} dB" if s["enable_noise"][phase] else "no noise"
-            noise_i_tag = f"SNR {s['snr_db_i'][phase]} dB" if s["enable_noise"][phase] else "no noise"
+            noise_v_tag = f"SNR {s['snr_db_v'][phase]} dB" if s["enable_noise_v"][phase] else "no noise"
+            noise_i_tag = f"SNR {s['snr_db_i'][phase]} dB" if s["enable_noise_i"][phase] else "no noise"
             harm_v_tag  = (f"H{list(s['harmonics_v'][phase].keys())}"
-                           if s["enable_harmonics"][phase] and s["harmonics_v"][phase] else "")
+                           if s["enable_harmonics_v"][phase] and s["harmonics_v"][phase] else "")
             harm_i_tag  = (f"H{list(s['harmonics_i'][phase].keys())}"
-                           if s["enable_harmonics"][phase] and s["harmonics_i"][phase] else "")
+                           if s["enable_harmonics_i"][phase] and s["harmonics_i"][phase] else "")
 
             ax.plot(t_ms, s["voltages"][phase],
                     color=color, linewidth=1.5, zorder=2,

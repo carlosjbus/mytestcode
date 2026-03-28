@@ -14,7 +14,7 @@ For a pure sine of amplitude A:  RMS = A / sqrt(2)
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-
+import json
 
 # ── Simulation parameters ─────────────────────────────────────────────────────
 FREQUENCY = 60          # Hz
@@ -22,7 +22,7 @@ AMPLITUDE_V = 4.1       # Peak voltage  (V)
 AMPLITUDE_I = 3      # Peak current  (A)
 POWER_FACTOR_ANGLE = 30 # Degrees current lags voltage (power-factor angle)
 CYCLES = 1              # Number of cycles to display
-SAMPLES = 1000         # Points per plot
+SAMPLES = 5       # Points per plot
 
 NOISE_SEED = 42           # Random seed for reproducibility (set to None for random)
 
@@ -145,97 +145,134 @@ def add_noise(signal, std):
 # ── Build waveforms (per set) ─────────────────────────────────────────────────
 t_ms = t * 1e3   # convert to milliseconds for the x-axis
 
-for s in SIGNAL_SETS:
-    s["noise_std_v"] = {}
-    s["noise_std_i"] = {}
-    for ph in ("A", "B", "C"):
-        if s["enable_noise"][ph]:
-            s["noise_std_v"][ph] = snr_db_to_noise_std(AMPLITUDE_V, s["snr_db_v"][ph])
-            s["noise_std_i"][ph] = snr_db_to_noise_std(AMPLITUDE_I, s["snr_db_i"][ph])
-            print(f"{s['label']} Phase {ph}: "
-                  f"SNR_V = {s['snr_db_v'][ph]} dB => σ_V = {s['noise_std_v'][ph]:.4f} V, "
-                  f"SNR_I = {s['snr_db_i'][ph]} dB => σ_I = {s['noise_std_i'][ph]:.4f} A")
-        else:
-            s["noise_std_v"][ph] = 0.0
-            s["noise_std_i"][ph] = 0.0
-            print(f"{s['label']} Phase {ph}: noise disabled")
 
-    harm_v = {ph: s["harmonics_v"][ph] if s["enable_harmonics"][ph] else None
-              for ph in ("A", "B", "C")}
-    harm_i = {ph: s["harmonics_i"][ph] if s["enable_harmonics"][ph] else None
-              for ph in ("A", "B", "C")}
+def build_waveforms():
+    """Compute clean and noisy voltage/current waveforms for every signal set.
 
-    s["voltages_clean"] = {ph: waveform(AMPLITUDE_V, off, harmonics=harm_v[ph])
-                           for ph, off in phase_offsets_deg.items()}
-    s["currents_clean"] = {ph: waveform(AMPLITUDE_I, off, pf_rad, harmonics=harm_i[ph])
-                           for ph, off in phase_offsets_deg.items()}
-    s["voltages"] = {ph: add_noise(s["voltages_clean"][ph], s["noise_std_v"][ph])
-                     for ph in phase_offsets_deg}
-    s["currents"] = {ph: add_noise(s["currents_clean"][ph], s["noise_std_i"][ph])
-                     for ph in phase_offsets_deg}
+    Returns
+    -------
+    list[dict]
+        One dict per signal set containing the original configuration keys
+        plus the computed waveform arrays:
+        ``noise_std_v``, ``noise_std_i``, ``voltages``, ``currents``.
+        Each voltage/current array is the sum of the clean signal and noise.
+    """
+    results = []
+    for s in SIGNAL_SETS:
+        result = dict(s)  # shallow copy so we don't mutate the config
+        result["noise_std_v"] = {}
+        result["noise_std_i"] = {}
+        for ph in ("A", "B", "C"):
+            if result["enable_noise"][ph]:
+                result["noise_std_v"][ph] = snr_db_to_noise_std(AMPLITUDE_V, result["snr_db_v"][ph])
+                result["noise_std_i"][ph] = snr_db_to_noise_std(AMPLITUDE_I, result["snr_db_i"][ph])
+                print(f"{result['label']} Phase {ph}: "
+                      f"SNR_V = {result['snr_db_v'][ph]} dB => σ_V = {result['noise_std_v'][ph]:.4f} V, "
+                      f"SNR_I = {result['snr_db_i'][ph]} dB => σ_I = {result['noise_std_i'][ph]:.4f} A")
+            else:
+                result["noise_std_v"][ph] = 0.0
+                result["noise_std_i"][ph] = 0.0
+                print(f"{result['label']} Phase {ph}: noise disabled")
+
+        harm_v = {ph: result["harmonics_v"][ph] if result["enable_harmonics"][ph] else None
+                  for ph in ("A", "B", "C")}
+        harm_i = {ph: result["harmonics_i"][ph] if result["enable_harmonics"][ph] else None
+                  for ph in ("A", "B", "C")}
+
+        result["voltages"] = {
+            ph: add_noise(
+                waveform(AMPLITUDE_V, off, harmonics=harm_v[ph]),
+                result["noise_std_v"][ph],
+            )
+            for ph, off in phase_offsets_deg.items()
+        }
+        result["currents"] = {
+            ph: add_noise(
+                waveform(AMPLITUDE_I, off, pf_rad, harmonics=harm_i[ph]),
+                result["noise_std_i"][ph],
+            )
+            for ph, off in phase_offsets_deg.items()
+        }
+        results.append(result)
+    
+   
+    return results
 
 
 # ── Plot ──────────────────────────────────────────────────────────────────────
-n_sets = len(SIGNAL_SETS)
-fig = plt.figure(figsize=(7 * n_sets, 10))
-fig.suptitle(
-    f"Three-Phase Voltage & Current  |  "
-    f"f = {FREQUENCY} Hz  |  "
-    f"PF angle = {POWER_FACTOR_ANGLE}°  |  "
-    f"Vp = {AMPLITUDE_V} V  |  Ip = {AMPLITUDE_I} A",
-    fontsize=11, fontweight="bold"
-)
 
-gs = gridspec.GridSpec(3, n_sets, hspace=0.55, wspace=0.35)
 
-for col, s in enumerate(SIGNAL_SETS):
-    for idx, phase in enumerate(("A", "B", "C")):
-        ax = fig.add_subplot(gs[idx, col])
-        color = phase_colors[phase]
-        offset = phase_offsets_deg[phase]
+def plot(signal_sets):
+    """Create a multi-panel figure of three-phase voltage and current waveforms.
 
-        noise_v_tag = f"SNR {s['snr_db_v'][phase]} dB" if s["enable_noise"][phase] else "no noise"
-        noise_i_tag = f"SNR {s['snr_db_i'][phase]} dB" if s["enable_noise"][phase] else "no noise"
-        harm_v_tag  = (f"H{list(s['harmonics_v'][phase].keys())}"
-                       if s["enable_harmonics"][phase] and s["harmonics_v"][phase] else "")
-        harm_i_tag  = (f"H{list(s['harmonics_i'][phase].keys())}"
-                       if s["enable_harmonics"][phase] and s["harmonics_i"][phase] else "")
+    Parameters
+    ----------
+    signal_sets : list[dict]
+        Waveform data returned by :func:`build_waveforms`.
+    """
+    n_sets = len(signal_sets)
+    fig = plt.figure(figsize=(7 * n_sets, 10))
+    fig.suptitle(
+        f"Three-Phase Voltage & Current  |  "
+        f"f = {FREQUENCY} Hz  |  "
+        f"PF angle = {POWER_FACTOR_ANGLE}°  |  "
+        f"Vp = {AMPLITUDE_V} V  |  Ip = {AMPLITUDE_I} A",
+        fontsize=11, fontweight="bold"
+    )
 
-        # Clean reference (faint) behind noisy waveform
-        ax.plot(t_ms, s["voltages_clean"][phase],
-                color=color, linewidth=1.0, alpha=0.25, zorder=1)
-        ax.plot(t_ms, s["voltages"][phase],
-                color=color, linewidth=1.5, zorder=2,
-                label=f"Phase {phase} V  ({offset}°  {noise_v_tag}  {harm_v_tag})")
+    gs = gridspec.GridSpec(3, n_sets, hspace=0.55, wspace=0.35)
 
-        ax.plot(t_ms, s["currents_clean"][phase],
-                color=color, linewidth=1.0, alpha=0.25, linestyle="--", zorder=1)
-        ax.plot(t_ms, s["currents"][phase],
-                color=color, linewidth=1.5, linestyle="--", zorder=2,
-                label=f"Phase {phase} I  (lag {POWER_FACTOR_ANGLE}°  {noise_i_tag}  {harm_i_tag})")
+    for col, s in enumerate(signal_sets):
+        for idx, phase in enumerate(("A", "B", "C")):
+            ax = fig.add_subplot(gs[idx, col])
+            color = phase_colors[phase]
+            offset = phase_offsets_deg[phase]
 
-        # Shade between noisy voltage and current
-        ax.fill_between(t_ms, s["voltages"][phase], s["currents"][phase],
-                        alpha=0.08, color=color)
+            noise_v_tag = f"SNR {s['snr_db_v'][phase]} dB" if s["enable_noise"][phase] else "no noise"
+            noise_i_tag = f"SNR {s['snr_db_i'][phase]} dB" if s["enable_noise"][phase] else "no noise"
+            harm_v_tag  = (f"H{list(s['harmonics_v'][phase].keys())}"
+                           if s["enable_harmonics"][phase] and s["harmonics_v"][phase] else "")
+            harm_i_tag  = (f"H{list(s['harmonics_i'][phase].keys())}"
+                           if s["enable_harmonics"][phase] and s["harmonics_i"][phase] else "")
 
-        ax.axhline(0, color="gray", linewidth=0.7, linestyle=":")
-        ax.set_ylabel("Amplitude", fontsize=9)
-        ax.set_title(f"{s['label']} — Phase {phase}", fontsize=10, fontweight="bold")
-        ax.legend(loc="upper right", fontsize=8)
-        ax.grid(True, alpha=0.35)
+            ax.plot(t_ms, s["voltages"][phase],
+                    color=color, linewidth=1.5, zorder=2,
+                    label=f"Phase {phase} V  ({offset}°  {noise_v_tag}  {harm_v_tag})")
 
-        ax_right = ax.twinx()
-        ax_right.set_ylim(ax.get_ylim())
-        ax_right.set_yticks([AMPLITUDE_V, -AMPLITUDE_V, AMPLITUDE_I, -AMPLITUDE_I])
-        ax_right.set_yticklabels(
-            [f"{AMPLITUDE_V} V", f"−{AMPLITUDE_V} V",
-             f"{AMPLITUDE_I} A", f"−{AMPLITUDE_I} A"],
-            fontsize=7
-        )
+            ax.plot(t_ms, s["currents"][phase],
+                    color=color, linewidth=1.5, linestyle="--", zorder=2,
+                    label=f"Phase {phase} I  (lag {POWER_FACTOR_ANGLE}°  {noise_i_tag}  {harm_i_tag})")
 
-        if idx == 2:
-            ax.set_xlabel("Time (ms)", fontsize=10)
+            # Shade between noisy voltage and current
+            ax.fill_between(t_ms, s["voltages"][phase], s["currents"][phase],
+                            alpha=0.08, color=color)
 
-plt.savefig("three_phase_plot.png", dpi=150, bbox_inches="tight")
-print("Plot saved to three_phase_plot.png")
-plt.show()
+            ax.axhline(0, color="gray", linewidth=0.7, linestyle=":")
+            ax.set_ylabel("Amplitude", fontsize=9)
+            ax.set_title(f"{s['label']} — Phase {phase}", fontsize=10, fontweight="bold")
+            ax.legend(loc="upper right", fontsize=8)
+            ax.grid(True, alpha=0.35)
+
+            ax_right = ax.twinx()
+            ax_right.set_ylim(ax.get_ylim())
+            ax_right.set_yticks([AMPLITUDE_V, -AMPLITUDE_V, AMPLITUDE_I, -AMPLITUDE_I])
+            ax_right.set_yticklabels(
+                [f"{AMPLITUDE_V} V", f"−{AMPLITUDE_V} V",
+                 f"{AMPLITUDE_I} A", f"−{AMPLITUDE_I} A"],
+                fontsize=7
+            )
+
+            if idx == 2:
+                ax.set_xlabel("Time (ms)", fontsize=10)
+
+    plt.savefig("three_phase_plot.png", dpi=150, bbox_inches="tight")
+    print("Plot saved to three_phase_plot.png")
+    plt.show()
+
+
+if __name__ == "__main__":
+    waveform_data = build_waveforms()
+    print("RR --> " + json.dumps(waveform_data, indent=4, default=str))
+    print("BB --> " + json.dumps(waveform_data[0]["voltages"], indent=4, default=str))
+
+    plot(waveform_data)

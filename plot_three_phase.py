@@ -22,7 +22,7 @@ AMPLITUDE_V = 4.1       # Peak voltage  (V)
 AMPLITUDE_I = 3      # Peak current  (A)
 POWER_FACTOR_ANGLE = 30 # Degrees current lags voltage (power-factor angle)
 CYCLES = 1              # Number of cycles to display
-SAMPLES = 5       # Points per plot
+SAMPLES = 1000       # Points per plot
 
 NOISE_SEED = 42           # Random seed for reproducibility (set to None for random)
 
@@ -272,7 +272,7 @@ def plot(signal_sets):
 
 if __name__ == "__main__":
     waveform_data = build_waveforms()
-    print("RR --> " + json.dumps(waveform_data, indent=4, default=str))
-    print("BB --> " + json.dumps(waveform_data[0]["voltages"], indent=4, default=str))
+    #print("RR --> " + json.dumps(waveform_data, indent=4, default=str))
+    #print("BB --> " + json.dumps(waveform_data[0]["voltages"], indent=4, default=str))
 
     plot(waveform_data)

@@ -55,6 +55,9 @@ SIGNAL_SETS = [
         # Per-phase DC offset
         "offset_v": {"A": 0.0, "B": 0.0, "C": 0.0},
         "offset_i": {"A": 0.0, "B": 0.0, "C": 0.0},
+        # Per-phase additional angular offset (degrees)
+        "angular_offset_v": {"A": 0.0, "B": 0.0, "C": 0.0},
+        "angular_offset_i": {"A": 0.0, "B": 0.0, "C": 0.0},
     },
     {
         "label": "Set 2",
@@ -77,6 +80,9 @@ SIGNAL_SETS = [
         # Per-phase DC offset
         "offset_v": {"A": 0.0, "B": 0.0, "C": 0.0},
         "offset_i": {"A": 0.0, "B": 0.0, "C": 0.0},
+        # Per-phase additional angular offset (degrees)
+        "angular_offset_v": {"A": 0.0, "B": 0.0, "C": 0.0},
+        "angular_offset_i": {"A": 0.0, "B": 0.0, "C": 0.0},
     },
 ]
 
@@ -121,7 +127,7 @@ phase_colors      = {"A": "#e74c3c",   # red
 pf_rad = np.deg2rad(POWER_FACTOR_ANGLE)
 
 
-def waveform(amplitude, offset_deg, extra_lag_rad=0.0, harmonics=None, dc_offset=0.0):
+def waveform(amplitude, offset_deg, extra_lag_rad=0.0, harmonics=None, dc_offset=0.0, extra_offset_deg=0.0):
     """Return a sinusoidal waveform with optional harmonic content.
 
     Parameters
@@ -136,8 +142,10 @@ def waveform(amplitude, offset_deg, extra_lag_rad=0.0, harmonics=None, dc_offset
         Mapping ``{n: (rel_amplitude, phase_deg)}`` for each harmonic order *n*.
     dc_offset : float
         DC offset added to the waveform.
+    extra_offset_deg : float
+        Additional angular offset in degrees added on top of *offset_deg*.
     """
-    theta = np.deg2rad(offset_deg)
+    theta = np.deg2rad(offset_deg) + np.deg2rad(extra_offset_deg)
     sig = amplitude * np.sin(omega * t + theta - extra_lag_rad) + dc_offset
     if harmonics:
         for n, (rel_amp, h_phase_deg) in harmonics.items():
@@ -199,7 +207,8 @@ def build_waveforms():
         result["voltages"] = {
             ph: add_noise(
                 waveform(AMPLITUDE_V, off, harmonics=harm_v[ph],
-                         dc_offset=result["offset_v"][ph]),
+                         dc_offset=result["offset_v"][ph],
+                         extra_offset_deg=result["angular_offset_v"][ph]),
                 result["noise_std_v"][ph],
             )
             for ph, off in phase_offsets_deg.items()
@@ -207,7 +216,8 @@ def build_waveforms():
         result["currents"] = {
             ph: add_noise(
                 waveform(AMPLITUDE_I, off, pf_rad, harmonics=harm_i[ph],
-                         dc_offset=result["offset_i"][ph]),
+                         dc_offset=result["offset_i"][ph],
+                         extra_offset_deg=result["angular_offset_i"][ph]),
                 result["noise_std_i"][ph],
             )
             for ph, off in phase_offsets_deg.items()

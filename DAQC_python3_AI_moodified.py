@@ -41,9 +41,8 @@ class DAQmx(object):
         self.nidaq = ctypes.windll.nicaiu
         self.NI_Devices()
                
-    def NI_Devices (self):
+    def NI_Devices(self):
         self.NI_devices = []
-        slot = ctypes.c_uint#uInt32()
         buff = ctypes.create_string_buffer(2048)
         self.nidaq.DAQmxGetSysDevNames(ctypes.byref(buff), 2048)
         print ('hhh', buff, buff.value, type (buff.value), type (buff))
@@ -88,25 +87,15 @@ class DAQmx(object):
         SNR_db=float(kwargs.get('SNR_db'))
 
 
-        deltaT = ctypes.c_double() #float64() #c_double
-        sysFrequencyX = ctypes.c_double( sysFrequencyX)
-        sysFrequencyY = ctypes.c_double ( sysFrequencyY)
+        sysFrequencyX = ctypes.c_double(sysFrequencyX)
+        sysFrequencyY = ctypes.c_double(sysFrequencyY)
 
         phaseOffset = ctypes.c_double()
         temp1 = ctypes.c_double()
         temp2 = ctypes.c_double()
 
-        sampleRateY = ctypes.c_double()
-        sampleRateX = ctypes.c_double()
-                      
-        data_type = ctypes.c_double * 32 #float64*32          #commented out 1/8/17
-        offsetIndex  = data_type()     #commented out 1/8/17
-        #offsetIndex = float64()
-                
-        offsetIndex = 0.0
-
         elements_per_pole = 3
-        X_index= 1
+        X_index = 1
         
         #print 'type: self.samppleRate, self.numSampPerChannel', type(self.sampleRate), type(self.numSampsPerChannel)
         print('generateSineWave sysFrequencyX >',  sysFrequencyX, sysFrequencyX.value)
@@ -124,48 +113,33 @@ class DAQmx(object):
 
 
 
-        print('\n<<<< calculationg data...\n')
-        for i in range (self.nChannels):               #self.numSampsPerChannel old parameter placement
-            for j in range (self.numSampsPerChannel):                    #self.nChannels old parameter placement
-                
-                #phaseOffset = self.phaseOffsets [j] * pi /180.0 
-                phaseOffset.value  = self.phaseOffsets [i] * pi /180.0
+        print('\n<<<< calculating data...\n')
+        # Precompute angular steps per sample (loop-invariant)
+        ang_step_x = 2.0 * pi / (self.sampleRate.value / sysFrequencyX.value)
+        ang_step_y = 2.0 * pi / (self.sampleRate.value / sysFrequencyY.value)
 
+        for i in range(self.nChannels):
+            phaseOffset.value = self.phaseOffsets[i] * pi / 180.0
+            base_offset = i * self.numSampsPerChannel
+
+            for j in range(self.numSampsPerChannel):
                 if is_IR_chassis:
                     Xelement = j % elements_per_pole
 
-                    #1, 4 and 7. index corresponding to X side values
-                    if (Xelement == X_index):
-                        temp1.value = self.dcOffsets [j] + self.amplitudes[j] *sin(
-                            ctypes.c_double(i).value *2.0*pi/(self.sampleRate.value/sysFrequencyY.value) +
-                            phaseOffset.value)
-
+                    if Xelement == X_index:
+                        temp1.value = self.dcOffsets[j] + self.amplitudes[j] * sin(
+                            i * ang_step_y + phaseOffset.value)
                         temp2.value = self.calculateHarmonics(i, j, sysFrequencyY, phaseOffset)
-                        #temp2.value = 0.0
-                                      
-                    else:                   
-                        #temp1= self.dcOffsets [j] + self.amplitudes[j] *sin(ctypes.c_double(i).value *2.0*pi/(self.sampleRate/sys_frequency) + phaseOffset)
-                        temp1.value = self.dcOffsets [j] + self.amplitudes[j] *sin(
-                            ctypes.c_double(i).value *2.0*pi/(self.sampleRate.value/sysFrequencyX.value) +
-                            phaseOffset.value)
-                        temp2.value  = self.calculateHarmonics(i, j, sysFrequencyX, phaseOffset)
-                        #temp2.value = 0.0
-                        #
-                                            
-                    #self.data[j * self.numSampsPerChannel + i] = temp1 + temp2                    
+                    else:
+                        temp1.value = self.dcOffsets[j] + self.amplitudes[j] * sin(
+                            i * ang_step_x + phaseOffset.value)
+                        temp2.value = self.calculateHarmonics(i, j, sysFrequencyX, phaseOffset)
                 else:
-                    #print (' <<<< not an IR >>>')
-                    temp1.value = self.dcOffsets [i] + self.amplitudes[i] *sin(ctypes.c_double(j).value *2.0*pi/(self.sampleRate.value/sysFrequencyX.value) + phaseOffset.value)
+                    temp1.value = self.dcOffsets[i] + self.amplitudes[i] * sin(
+                        j * ang_step_x + phaseOffset.value)
                     temp2.value = 0.0
-                                                          
-                #print 'llossss', type (temp1), type(temp2)    
-                self.data[i * self.numSampsPerChannel + j] = temp1.value + temp2.value
-                #self.datanp = np.append (self.datanp, temp1.value + temp2.value)
-                #print ('last element', self.datanp [-1])
-                #self.data.append((temp1.value + temp2.value))
-                
-                #print ('sample number, channel, data >>', i,j, (i * self.numSampscPerChannel + j), self.data[i * self.numSampsPerChannel + j])
-                #print ' myData[j *numElements + i]', self.data[j *numElements + i]
+
+                self.data[base_offset + j] = temp1.value + temp2.value
 
 
         self.writeDataToFile()
@@ -181,23 +155,18 @@ class DAQmx(object):
     
     def generateSineWaveNumPy(self, include_noise, include_harmonics, noise_std, channels_to_modify, highest_harm, SNR_db):
 
-        print ('\n<<< entering generateSineWaveNumPy \n')
+        print('\n<<< entering generateSineWaveNumPy \n')
         # Sine wave parameters
 
         fundamental_frequency = 60
         snr_db_empirical = 0
 
-        phase_offset = 0  # radians
-
         # NI-DAQ parameters
-        sampling_rate = self.sampleRate.value #64800 for 6800
-        duration = ctypes.c_double (self.numSampsPerChannel).value / sampling_rate  # seconds
+        sampling_rate = self.sampleRate.value
+        duration = float(self.numSampsPerChannel) / sampling_rate  # seconds
         num_of_channels = self.nChannels
-        samps_per_chan = self.numSampsPerChannel #1080
+        samps_per_chan = self.numSampsPerChannel
 
-        #defintions
-        sine_wave = np.array(samps_per_chan * num_of_channels, dtype= np.double)
-        phaseOffset = ctypes.c_double()
         all_sine_waves = []
         all_sine_waves_no_harms = []
 
@@ -217,17 +186,16 @@ class DAQmx(object):
         print ('\nharmonics >>', harmonics)
 
         for i in harmonics:
-            print(f"Harmonic %i: %i Hz"% (i / fundamental_frequency, i))
+            print(f"Harmonic {int(i / fundamental_frequency)}: {i} Hz")
 
         # Calculate sine wave values
 
-        for j in range (num_of_channels):
-            phaseOffset.value = self.phaseOffsets[j] * pi / 180.0
-            #sine_wave = amplitude * np.sin(2 * np.pi * frequency * time_points + phase_offset)
-            sine_wave = self.amplitudes[j] * np.sin(2 * np.pi * fundamental_frequency * time_points + phaseOffset.value)
+        for j in range(num_of_channels):
+            phase_offset = self.phaseOffsets[j] * pi / 180.0
+            sine_wave = self.amplitudes[j] * np.sin(2 * np.pi * fundamental_frequency * time_points + phase_offset)
             #calculate harmonics
             if include_harmonics and j in channels_to_modify:
-                temp = sine_wave + self.calculateHarmonics_np(phaseOffset.value, time_points,highest_harm,fundamental_frequency)
+                temp = sine_wave + self.calculateHarmonics_np(phase_offset, time_points, highest_harm, fundamental_frequency)
             else:
                 temp = sine_wave
 
@@ -235,11 +203,8 @@ class DAQmx(object):
             #noise = 0.2 * np.random.normal(size=temp.shape)
             #print ("temp.shape. temp.size", temp.shape, temp.size)
 
-            if include_noise and j in  channels_to_modify:
-                noise = np.random.normal(0, noise_std, temp.size) #
-                #distorted_signal = temp + noise
-                noisy_signal, snr_db_empirical = self.add_awgn_to_snr_db(temp, SNR_db)
-                distorted_signal = noisy_signal
+            if include_noise and j in channels_to_modify:
+                distorted_signal, snr_db_empirical = self.add_awgn_to_snr_db(temp, SNR_db)
             else:
                 distorted_signal = temp
 
@@ -260,7 +225,6 @@ class DAQmx(object):
         self.writeDataToFileNumPy(time_points, arr1, samps_per_chan, all_sine_waves)
 
         return arr1, time_points, all_sine_waves, all_sine_waves_no_harms
-        print('\n<<< exiting generateSineWaveNumPy \n')
 
 
     def add_awgn_to_snr_db(self, x, snr_db, rng=None):
@@ -282,24 +246,19 @@ class DAQmx(object):
         return y, snr_db_empirical
 
     def calculateHarmonics(self, i, j, sysFrequencyX, phaseOffset):
-        
         '''
             Calculates harmonic components
-            Use the same harmonics magntitude for all harmonic components
+            Use the same harmonics magnitude for all harmonic components
         '''
-        sum = ctypes.c_double ()
-        harmonicsComp = ctypes.c_double()
-        sum.value = 0.0
-        
-        if self.nthHarmonics:        
-           
-            for n in range (len(self.nthHarmonics)):
-                harmonicsComp.value = self.dcOffsets [j] + self.nthHarmonicsAmp[j] *sin(ctypes.c_double(i).value * ctypes.c_double(self.nthHarmonics[n]).value * 2.0*pi/(self.sampleRate.value/sysFrequencyX.value)\
-                                         + phaseOffset.value)                         
-                sum.value = sum.value + harmonicsComp.value
+        result = 0.0
 
+        if self.nthHarmonics:
+            ang_step = 2.0 * pi / (self.sampleRate.value / sysFrequencyX.value)
+            for n in range(len(self.nthHarmonics)):
+                result += self.dcOffsets[j] + self.nthHarmonicsAmp[j] * sin(
+                    i * self.nthHarmonics[n] * ang_step + phaseOffset.value)
 
-        return sum.value
+        return result
 
     def calculateHarmonics_np(self, phaseOffset, time_points,highest_harm, fundamental_frequency):
         # Define the fundamental frequency (Hz)
@@ -441,76 +400,39 @@ class DAQmx(object):
         plt.tight_layout()
         plt.show()
 
-    def writeDataToFile(self, fileName = "calculated_wavefom_values.txt", arg = None):
+    def writeDataToFile(self, fileName="calculated_wavefom_values.txt", arg=None):
         print('<<entering writeDataToFile method\n')
-        #fileName = r'c:\temp\calculated_wavefom_values.txt'
         fileName = "c:\\temp\\" + fileName
-        #print('fileName', fileName)
 
-        if arg is None:
-            data_to_write = self.data
-        else:
-            data_to_write = arg
+        data_to_write = self.data if arg is None else arg
 
-        f = open (fileName, 'w')
+        with open(fileName, 'w') as f:
+            f.write('len(data_to_write %i)\n' % (len(data_to_write)))
 
-        #f.write ('sample, channel, value\n')
-        f.write('len(data_to_write %i)\n'%(len(data_to_write)))
-        
-        for index in range (len (data_to_write)):
-            my_line = 'index %i, channel %i,sample %i, value %f\n' %(index, index /self.numSampsPerChannel, index %self.numSampsPerChannel, data_to_write[index])
-            f.write (my_line)
+            for index in range(len(data_to_write)):
+                f.write('index %i, channel %i,sample %i, value %f\n' % (
+                    index, index // self.numSampsPerChannel,
+                    index % self.numSampsPerChannel, data_to_write[index]))
 
-
-        #for lines in range (len (self.data)):
-        #    print ('lines >>>',self.data [lines])
-                    
-        f.close()       
-        
         print('<<end writeDataToFile method\n')
     
 
     def writeDataToFileNumPy(self, time_points, entire_array, samps_per_chan, all_sine_waves,
-                             fileName = "waveforms_numPy_array.txt"):
+                             fileName="waveforms_numPy_array.txt"):
 
         print('\n<<entering writeDataToFileNumPy method\n')
         fileName = "c:\\temp\\" + fileName
-        #print('writeDataToFileNumP > fileName', fileName)
 
-        f = open(fileName, 'w')
-        # f.write ('sample, channel, value\n')
-        #f.write(('len(sine %i)\n' % (len(sine))))
+        with open(fileName, 'w') as f:
+            for index in range(len(entire_array)):
+                f.write('index <%i>, channel > %i,sample > %i, value > %f\n' % (
+                    index, index // samps_per_chan, index % samps_per_chan, entire_array[index]))
 
-        #for index in range(len(sine)):
-        #    my_line = 'index %i, time %f value %f\n' % (
-        #    index, time [index], sine[index])
-        #    f.write(my_line)
+            f.write('~' * 40 + '\n')
 
-        # for lines in range (len (self.data)):
-        #    print ('lines >>>',self.data [lines])
-        index = 0
-        for index in range (len (entire_array)):
-            #print ("\nmultiple_lists >>", entire_array[index], len (entire_array))
-            my_line = 'index <%i>, channel > %i,sample > %i, value > %f\n' % (
-                    index, index / samps_per_chan, index % samps_per_chan, entire_array[index])
-
-            f.write(my_line)
-
-        f.write ('~'*40 + '\n')     #add a line of special character as a section divider
-        my_line = ""
-
-        for sample in range (samps_per_chan):
-            #comment
-            for wave_form in all_sine_waves:
-                my_line = my_line + '%f'% (wave_form [sample]) + ','
-
-            my_line = 'index %i > '% (sample) + my_line +'\n'
-            #print ('my_line >>', my_line)
-
-            f.write(my_line)
-            my_line = ""
-
-        f.close()
+            for sample in range(samps_per_chan):
+                parts = ['%f' % wf[sample] for wf in all_sine_waves]
+                f.write('index %i > %s\n' % (sample, ','.join(parts)))
 
         print('<<end  writeDataToFileNumPy method\n')
 

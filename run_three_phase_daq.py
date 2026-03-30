@@ -27,7 +27,7 @@ from DAQC_python3_AI_modified import DAQmx
 
 PHYS_CHAN      = "cDAQ5Mod1/ao0:2,cDAQ5Mod2/ao0:2,cDAQ5Mod4/ao0:5"
 SAMP_RATE      = 64800.0    # samples / second
-SAMPS_PER_CHAN = 1080       # samples per channel (one 60 Hz cycle)
+SAMPS_PER_CHAN = 64800      # samples per channel (one 60 Hz cycle)
 N_CHANNELS     = 12         # 2 signal sets × (3V + 3I) channels
 
 # ── Simulator parameters ──────────────────────────────────────────────────────
@@ -96,8 +96,9 @@ SIGNAL_SETS = [
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def waveforms_to_datanp(signal_sets):
-    """Flatten build_waveforms() output into a channel-grouped 1-D float64 array.
+def waveforms_to_datanp(signal_sets, file_path=r"c:\temp\numpy_waveform_data.txt"):
+    """Flatten build_waveforms() output into a channel-grouped 1-D float64 array
+    and write the result to a text file.
 
     Channel order per signal set: V_A, V_B, V_C, I_A, I_B, I_C.
     Multiple signal sets are appended in list order.
@@ -106,6 +107,8 @@ def waveforms_to_datanp(signal_sets):
     ----------
     signal_sets : list[dict]
         Return value of ThreePhaseSimulator.build_waveforms().
+    file_path : str
+        Destination path for the text file (default: ``c:\\temp\\numpy_waveform_data.txt``).
 
     Returns
     -------
@@ -114,12 +117,30 @@ def waveforms_to_datanp(signal_sets):
         DAQmxWriteAnalogF64 with DAQmx_Val_GroupByChannel layout.
     """
     channels = []
+    channel_labels = []
     for s in signal_sets:
         for ph in ("A", "B", "C"):
             channels.append(s["voltages"][ph])
+            channel_labels.append(f"{s['label']} V_{ph}")
         for ph in ("A", "B", "C"):
             channels.append(s["currents"][ph])
-    return np.concatenate(channels).astype(np.float64, copy=False)
+            channel_labels.append(f"{s['label']} I_{ph}")
+
+    arr = np.concatenate(channels).astype(np.float64, copy=False)
+    samps_per_chan = len(channels[0])
+
+    with open(file_path, 'w') as f:
+        f.write(f"total samples: {len(arr)}, channels: {len(channels)}, "
+                f"samples_per_channel: {samps_per_chan}\n")
+        f.write(f"{'index':<8} {'channel':<6} {'label':<20} {'sample':<8} {'value'}\n")
+        f.write("-" * 60 + "\n")
+        for index in range(len(arr)):
+            chan  = index // samps_per_chan
+            samp  = index  % samps_per_chan
+            f.write(f"{index:<8} {chan:<6} {channel_labels[chan]:<20} {samp:<8} {arr[index]:.6f}\n")
+
+    print(f"Waveform data written to {file_path}  ({len(arr)} samples, {len(channels)} channels)")
+    return arr
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -135,7 +156,6 @@ def main():
         signal_sets=SIGNAL_SETS,
     )
     waveform_data = sim.build_waveforms()
-    sim.plot(waveform_data)
 
     # ── 2. Initialize DAQmx with sampPerChan and sampleRate ───────────────────
     daq = DAQmx(samp_per_chan=SAMPS_PER_CHAN, sample_rate=SAMP_RATE)
@@ -161,6 +181,9 @@ def main():
     daq.datanp = waveforms_to_datanp(waveform_data)
     print(f"\nwaveforms_to_datanp: shape={daq.datanp.shape}, dtype={daq.datanp.dtype}")
     daq.configure()
+
+    # ── 5. Plot waveforms ─────────────────────────────────────────────────────
+    sim.plot(waveform_data)
 
 
 if __name__ == "__main__":

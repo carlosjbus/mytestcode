@@ -108,12 +108,12 @@ def snr_db_to_noise_std(amplitude, snr_db):
     """
     signal_rms = amplitude / np.sqrt(2)          # RMS of a pure sine
     noise_std  = signal_rms / (10 ** (snr_db / 20.0))
-    return noise_std
+    return np.float64(noise_std)
 
 
 # ── Time axis
 T = 1 / FREQUENCY
-t = np.linspace(0, CYCLES * T, SAMPLES)
+t = np.linspace(0, CYCLES * T, SAMPLES, dtype=np.float64)
 omega = 2 * np.pi * FREQUENCY   # Angular frequency (rad/s)
 
 rng = np.random.default_rng(NOISE_SEED)
@@ -145,22 +145,22 @@ def waveform(amplitude, offset_deg, extra_lag_rad=0.0, harmonics=None, dc_offset
     extra_offset_deg : float
         Additional angular offset in degrees added on top of *offset_deg*.
     """
-    theta = np.deg2rad(offset_deg) + np.deg2rad(extra_offset_deg)
-    sig = amplitude * np.sin(omega * t + theta - extra_lag_rad) + dc_offset
+    theta = np.float64(np.deg2rad(offset_deg) + np.deg2rad(extra_offset_deg))
+    sig = np.float64(amplitude) * np.sin(omega * t + theta - np.float64(extra_lag_rad)) + np.float64(dc_offset)
     if harmonics:
         for n, (rel_amp, h_phase_deg) in harmonics.items():
             h_phase_rad = np.deg2rad(h_phase_deg)
-            sig += amplitude * rel_amp * np.sin(
-                n * omega * t + n * theta - n * extra_lag_rad + h_phase_rad
+            sig += np.float64(amplitude) * np.float64(rel_amp) * np.sin(
+                n * omega * t + n * theta - n * np.float64(extra_lag_rad) + h_phase_rad
             )
-    return sig
+    return sig.astype(np.float64, copy=False)
 
 
 def add_noise(signal, std):
     """Add Gaussian white noise with the given standard deviation."""
     if std == 0.0:
-        return signal.copy()
-    return signal + rng.normal(loc=0.0, scale=std, size=signal.shape)
+        return signal.astype(np.float64, copy=True)
+    return (signal + rng.normal(loc=0.0, scale=std, size=signal.shape)).astype(np.float64, copy=False)
 
 # ── Build waveforms (per set) ─────────────────────────────────────────────────
 t_ms = t * 1e3   # convert to milliseconds for the x-axis

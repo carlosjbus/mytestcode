@@ -539,7 +539,9 @@ class DAQmx(object):
         #    self.data[i] = 2
          #   #print ('self.data', self.data[i])
 
-        print (f"DAQmxResetDevice result:{self.errorCheck(self.nidaq.DAQmxResetDevice('cDAQ5'), 'DAQmxResetDevice')}")
+        _chassis = self.physChan.value.decode().split('Mod')[0]
+        print(f"DAQmxResetDevice chassis: {_chassis}")
+        print(f"DAQmxResetDevice result:{self.errorCheck(self.nidaq.DAQmxResetDevice(ctypes.c_char_p(_chassis.encode())), 'DAQmxResetDevice')}")
 
         print(f"DAQmxCreateTask result: {self.errorCheck(self.nidaq.DAQmxCreateTask(ChanName.value, ctypes.byref(self.taskHandle)), 'DAQmxCreateTask')}")
 

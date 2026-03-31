@@ -873,7 +873,7 @@ class DAQmx(object):
         print(f"Timeout: '{chassis_name}' did not respond within {timeout}s")
         return False
 
-    def setup_daq_parameters(
+    def setup_daq_parameters(self, physChan, nchannels, sampleRate, numSampsPerChannel, amplitudes, phaseOffsets, dcOffsets,
                              harmonicAmplitudes, harmonicComponents, system_freq, dataBufferingEnabled = False):
         
         print('\n<<< in DAQC setup_daq_parameters >>>\n')

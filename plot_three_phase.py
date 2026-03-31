@@ -265,8 +265,7 @@ class ThreePhaseSimulator:
                     fontsize=7
                 )
 
-                if idx == 2:
-                    ax.set_xlabel("Time (ms)", fontsize=10)
+                ax.set_xlabel("Time (ms)", fontsize=10)
 
         plt.savefig("three_phase_plot.png", dpi=150, bbox_inches="tight")
         print("Plot saved to three_phase_plot.png")

@@ -320,8 +320,8 @@ class DAQmx(object):
         #fix, ax = plt.subplots()
         #fix.set_size_inches(12,8)
 
-        num_samples = int (self.sampleRate.value / 60) - 1  #one cycle
-        x = self.time_points[:num_samples]
+        num_samples = int(self.sampleRate.value * 0.017)  # samples for 17 ms
+        x = self.time_points[:num_samples] * 1000  # convert to milliseconds
 
         fig,axs = plt.subplots(2, 3, sharex=True, sharey=True)
 
@@ -374,6 +374,7 @@ class DAQmx(object):
         fix.set_size_inches(10, 6)
 
         num_samples = int(self.sampleRate.value / 60) - 1  # one cycle
+        x_ms = self.time_points[:num_samples] * 1000  # convert to milliseconds
 
         plt.subplot(1, 2, 1)
         plt.plot(frequencies[:len(frequencies) // 2], np.abs(fft_output)[:len(fft_output) // 2])
@@ -385,12 +386,12 @@ class DAQmx(object):
 
         plt.subplot(1, 2, 2)
         # Plot the sine wave
-        plt.plot(self.time_points[:num_samples], self.all_sine_waves_no_harms[Vchan][:num_samples], label='V1')
-        plt.plot(self.time_points[:num_samples], self.all_sine_waves[Vchan][:num_samples], label='V1 harm')
-        plt.plot(self.time_points[:num_samples], self.all_sine_waves_no_harms[Ichan][:num_samples], label='I1')
-        plt.plot(self.time_points[:num_samples], self.all_sine_waves[Ichan][:num_samples], label='I1 harm')
+        plt.plot(x_ms, self.all_sine_waves_no_harms[Vchan][:num_samples], label='V1')
+        plt.plot(x_ms, self.all_sine_waves[Vchan][:num_samples], label='V1 harm')
+        plt.plot(x_ms, self.all_sine_waves_no_harms[Ichan][:num_samples], label='I1')
+        plt.plot(x_ms, self.all_sine_waves[Ichan][:num_samples], label='I1 harm')
 
-        plt.xlabel("Time (s)")
+        plt.xlabel("Time (ms)")
         plt.ylabel("Amplitude (V)")
         plt.title("Sine Wave")
         plt.grid(True)

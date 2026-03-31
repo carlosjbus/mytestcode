@@ -539,22 +539,17 @@ class DAQmx(object):
         #    self.data[i] = 2
          #   #print ('self.data', self.data[i])
 
-        print ('DAQmxResetDevice', self.nidaq.DAQmxResetDevice('cDAQ5'))
+        print (f"DAQmxResetDevice result:{self.errorCheck(self.nidaq.DAQmxResetDevice('cDAQ5'), 'DAQmxResetDevice')}")
 
-        a = self.nidaq.DAQmxCreateTask(ChanName.value, ctypes.byref(self.taskHandle))
-        print ('print DAQmxCreateTask >>>>',a )
+        print(f"DAQmxCreateTask result: {self.errorCheck(self.nidaq.DAQmxCreateTask(ChanName.value, ctypes.byref(self.taskHandle)), 'DAQmxCreateTask')}")
 
         #print('DAQmxResetDevice', self.nidaq.DAQmxResetDevice(self.physChan))
 
-        b= self.nidaq.DAQmxCreateAOVoltageChan(self.taskHandle, self.physChan.value,ChanName.value, minVal, maxVal, PyDAQmx.DAQmx_Val_Volts, None)
-        print('print DAQmxCreateAOVoltageChan >>>>', b)
+        print(f"DAQmxCreateAOVoltageChan result: {self.errorCheck(self.nidaq.DAQmxCreateAOVoltageChan(self.taskHandle, self.physChan.value, ChanName.value, minVal, maxVal, PyDAQmx.DAQmx_Val_Volts, None), 'DAQmxCreateAOVoltageChan')}")
 
-        g = self.nidaq.DAQmxSetWriteRegenMode(self.taskHandle, PyDAQmx.DAQmx_Val_AllowRegen)
-        print ('DAQmxSetWriteRegenMode >>', g)
+        print(f"DAQmxSetWriteRegenMode result: {self.errorCheck(self.nidaq.DAQmxSetWriteRegenMode(self.taskHandle, PyDAQmx.DAQmx_Val_AllowRegen), 'DAQmxSetWriteRegenMode')}")
 
-        d = self.nidaq.DAQmxCfgSampClkTiming(self.taskHandle, None, self.sampleRate, PyDAQmx.DAQmx_Val_Rising,
-                                             PyDAQmx.DAQmx_Val_ContSamps, sampsPerChan)
-        print('DAQmxCfgSampClkTiming >>>', d)
+        print(f"DAQmxCfgSampClkTiming result: {self.errorCheck(self.nidaq.DAQmxCfgSampClkTiming(self.taskHandle, None, self.sampleRate, PyDAQmx.DAQmx_Val_Rising, PyDAQmx.DAQmx_Val_ContSamps, sampsPerChan), 'DAQmxCfgSampClkTiming')}")
 
 
         #c = self.nidaq.DAQmxStartTask(self.taskHandle)
@@ -567,10 +562,8 @@ class DAQmx(object):
         #                               self.data,  None, None)
 
 
-        e = self.nidaq.DAQmxWriteAnalogF64(self.taskHandle, sampsPerChan, False, 10, PyDAQmx.DAQmx_Val_GroupByChannel,
-                                       c_double_array, ctypes.byref (sampsPerChanWritten),  None)
+        print(f"DAQmxWriteAnalogF64 result: {self.errorCheck(self.nidaq.DAQmxWriteAnalogF64(self.taskHandle, sampsPerChan, False, 10, PyDAQmx.DAQmx_Val_GroupByChannel, c_double_array, ctypes.byref(sampsPerChanWritten), None), 'DAQmxWriteAnalogF64')}")
         #DAQmx_Val_GroupByScanNumber, DAQmx_Val_GroupByChannel
-        print('print DAQmxWriteAnalogF64 >>>>', e)
 
         self.bytesWritten += sampsPerChanWritten.value
         print ('%s OnEveryNSamplesEvent writing DAQ buffer: %i, total:%i ' %( time_string, sampsPerChanWritten.value, self.bytesWritten))
@@ -584,8 +577,7 @@ class DAQmx(object):
         # define DAQmx_Val_GroupByScanNumber                                       1   // Group by Scan Number
 
 
-        f = self.nidaq.DAQmxStartTask(self.taskHandle)
-        print('print DAQmxStartTask >>>>', f)
+        print(f"DAQmxStartTask result: {self.errorCheck(self.nidaq.DAQmxStartTask(self.taskHandle), 'DAQmxStartTask')}")
 
                 #task.StartTask()
         #task.DAQmxWriteAnalogF64(task, self.numSampsPerChannel, False, 10.0, DAQmx_Val_GroupByChannel,

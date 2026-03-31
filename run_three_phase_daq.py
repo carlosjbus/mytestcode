@@ -34,7 +34,7 @@ N_CHANNELS     = 12         # 2 signal sets × (3V + 3I) channels
 
 SIM_FREQUENCY  = 60
 SIM_PF_ANGLE   = 30
-SIM_CYCLES     = 1
+SIM_DURATION   = SAMPS_PER_CHAN / SAMP_RATE  # seconds
 SIM_NOISE_SEED = 42
 
 
@@ -150,8 +150,8 @@ def main():
     sim = ThreePhaseSimulator(
         frequency=SIM_FREQUENCY,
         power_factor_angle=SIM_PF_ANGLE,
-        cycles=SIM_CYCLES,
-        samples=SAMPS_PER_CHAN,
+        duration=SIM_DURATION,
+        sample_rate=SAMP_RATE,
         noise_seed=SIM_NOISE_SEED,
         signal_sets=SIGNAL_SETS,
     )

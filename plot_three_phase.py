@@ -25,10 +25,10 @@ class ThreePhaseSimulator:
         System frequency in Hz.
     power_factor_angle : float
         Degrees that current lags voltage.
-    cycles : int
-        Number of cycles to display.
-    samples : int
-        Number of sample points per plot.
+    duration : float
+        Duration of the waveform in seconds.
+    sample_rate : float
+        Sample rate in samples per second.
     noise_seed : int | None
         Random seed for reproducibility (``None`` for random).
     signal_sets : list[dict]
@@ -41,17 +41,16 @@ class ThreePhaseSimulator:
     PHASE_OFFSETS_DEG = {"A": 0, "B": -120, "C": -240}
     PHASE_COLORS      = {"A": "#e74c3c", "B": "#2ecc71", "C": "#3498db"}
 
-    def __init__(self, frequency=60, power_factor_angle=30, cycles=1,
-                 samples=1080, noise_seed=42, signal_sets=None):
+    def __init__(self, frequency=60, power_factor_angle=30, duration=1.0,
+                 sample_rate=64800.0, noise_seed=42, signal_sets=None):
         self.frequency = frequency
         self.power_factor_angle = power_factor_angle
-        self.cycles = cycles
-        self.samples = samples
+        self.duration = duration
+        self.sample_rate = sample_rate
         self.signal_sets = signal_sets or []
 
         # Derived quantities
-        T = 1 / self.frequency
-        self.t = np.linspace(0, cycles * T, samples, dtype=np.float64)
+        self.t = np.arange(0, self.duration, 1 / self.sample_rate, dtype=np.float64)
         self.t_ms = self.t * 1e3
         self.omega = np.float64(2 * np.pi * self.frequency)
         self.pf_rad = np.float64(np.deg2rad(self.power_factor_angle))
@@ -338,8 +337,8 @@ if __name__ == "__main__":
     sim = ThreePhaseSimulator(
         frequency=60,
         power_factor_angle=30,
-        cycles=1,
-        samples=1080,
+        duration=1/60,
+        sample_rate=64800.0,
         noise_seed=42,
         signal_sets=DEFAULT_SIGNAL_SETS,
     )

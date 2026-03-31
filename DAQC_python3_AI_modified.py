@@ -542,6 +542,7 @@ class DAQmx(object):
         _chassis = self.physChan.value.decode().split('Mod')[0]
         print(f"DAQmxResetDevice chassis: {_chassis}")
         print(f"DAQmxResetDevice result:{self.errorCheck(self.nidaq.DAQmxResetDevice(ctypes.c_char_p(_chassis.encode())), 'DAQmxResetDevice')}")
+        self._wait_for_device_ready(_chassis)
 
         print(f"DAQmxCreateTask result: {self.errorCheck(self.nidaq.DAQmxCreateTask(ChanName.value, ctypes.byref(self.taskHandle)), 'DAQmxCreateTask')}")
 
@@ -856,7 +857,23 @@ class DAQmx(object):
         print(errBuff.value.decode("utf-8"))
         return error_code
 
-    def setup_daq_parameters(self, physChan, nchannels, sampleRate, numSampsPerChannel, amplitudes, phaseOffsets, dcOffsets,
+    def _wait_for_device_ready(self, chassis_name, timeout=10.0, poll_interval=0.5):
+        """Poll DAQmxGetDevProductType until the device responds after reset, or timeout expires."""
+        device = ctypes.c_char_p(chassis_name.encode())
+        buff = ctypes.create_string_buffer(256)
+        elapsed = 0.0
+        while elapsed < timeout:
+            result = self.nidaq.DAQmxGetDevProductType(device, ctypes.byref(buff), 256)
+            if result == 0:
+                print(f"Device '{chassis_name}' ready after {elapsed:.1f}s: {buff.value.decode()}")
+                return True
+            print(f"Waiting for '{chassis_name}' to reboot... elapsed={elapsed:.1f}s (result={result})")
+            sleep(poll_interval)
+            elapsed += poll_interval
+        print(f"Timeout: '{chassis_name}' did not respond within {timeout}s")
+        return False
+
+    def setup_daq_parameters(
                              harmonicAmplitudes, harmonicComponents, system_freq, dataBufferingEnabled = False):
         
         print('\n<<< in DAQC setup_daq_parameters >>>\n')

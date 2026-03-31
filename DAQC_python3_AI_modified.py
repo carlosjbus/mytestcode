@@ -846,7 +846,7 @@ class DAQmx(object):
 
     def errorCheck(self, error_code, func):
         print('\nin errorCheck method, error code %d <<%s>>' %(error_code, func))
-        errBuff = create_string_buffer(2048)
+        errBuff = ctypes.create_string_buffer(2048)
         
         if error_code < 0:
             self.nidaq.DAQmxGetExtendedErrorInfo(errBuff,2048)            

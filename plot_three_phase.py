@@ -254,6 +254,7 @@ class ThreePhaseSimulator:
                              fontsize=10, fontweight="bold")
                 ax.legend(loc="upper right", fontsize=8)
                 ax.grid(True, alpha=0.35)
+                ax.set_xlim(0, 1000 / self.frequency)
 
                 ax_right = ax.twinx()
                 ax_right.set_ylim(ax.get_ylim())
@@ -337,7 +338,7 @@ if __name__ == "__main__":
     sim = ThreePhaseSimulator(
         frequency=60,
         power_factor_angle=30,
-        duration=1/60,
+        duration=1.0,
         sample_rate=64800.0,
         noise_seed=42,
         signal_sets=DEFAULT_SIGNAL_SETS,

@@ -13,7 +13,9 @@ Flow
 
 Channel order (GroupByChannel layout)
 --------------------------------------
-For each signal set in order:  V_A, V_B, V_C, I_A, I_B, I_C
+All voltage channels across all sets, then all current channels:
+  Set1_V_A, Set1_V_B, Set1_V_C, Set2_V_A, Set2_V_B, Set2_V_C,
+  Set1_I_A, Set1_I_B, Set1_I_C, Set2_I_A, Set2_I_B, Set2_I_C
 Two signal sets → 12 channels total.
 """
 
@@ -100,8 +102,8 @@ def waveforms_to_datanp(signal_sets, file_path=r"c:\temp\numpy_waveform_data.txt
     """Flatten build_waveforms() output into a channel-grouped 1-D float64 array
     and write the result to a text file.
 
-    Channel order per signal set: V_A, V_B, V_C, I_A, I_B, I_C.
-    Multiple signal sets are appended in list order.
+    Channel order: all voltage channels across all sets, then all current
+    channels across all sets (V_A, V_B, V_C per set, then I_A, I_B, I_C per set).
 
     Parameters
     ----------
@@ -122,6 +124,7 @@ def waveforms_to_datanp(signal_sets, file_path=r"c:\temp\numpy_waveform_data.txt
         for ph in ("A", "B", "C"):
             channels.append(s["voltages"][ph])
             channel_labels.append(f"{s['label']} V_{ph}")
+    for s in signal_sets:
         for ph in ("A", "B", "C"):
             channels.append(s["currents"][ph])
             channel_labels.append(f"{s['label']} I_{ph}")

@@ -178,7 +178,6 @@ class DAQmx(object):
         # Calculate the harmonic frequencies
         harmonics = np.arange(3,highest_harm + 1, 2) * fundamental_frequency
 
-        print ('\n<<< sine_wave', type (sine_wave))
         # Calculate time points
         time_points = np.arange(0, duration, 1 / sampling_rate)
         #print ('time_points', len (time_points), time_points)
@@ -857,10 +856,12 @@ class DAQmx(object):
         print(errBuff.value.decode("utf-8"))
         return error_code
 
-    def _wait_for_device_ready(self, chassis_name, timeout=10.0, poll_interval=0.5):
+    def _wait_for_device_ready(self, chassis_name, timeout=10.0, poll_interval=0.5, initial_delay=2.0):
         """Poll DAQmxGetDevProductType until the device responds after reset, or timeout expires."""
         device = ctypes.c_char_p(chassis_name.encode())
         buff = ctypes.create_string_buffer(256)
+        print(f"Waiting {initial_delay:.1f}s before polling '{chassis_name}'...")
+        sleep(initial_delay)
         elapsed = 0.0
         while elapsed < timeout:
             result = self.nidaq.DAQmxGetDevProductType(device, ctypes.byref(buff), 256)

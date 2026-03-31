@@ -864,10 +864,10 @@ class DAQmx(object):
         elapsed = 0.0
         while elapsed < timeout:
             result = self.nidaq.DAQmxGetDevProductType(device, ctypes.byref(buff), 256)
-            if result == 0:
+            if result == 0 and buff.value:
                 print(f"Device '{chassis_name}' ready after {elapsed:.1f}s: {buff.value.decode()}")
                 return True
-            print(f"Waiting for '{chassis_name}' to reboot... elapsed={elapsed:.1f}s (result={result})")
+            print(f"Waiting for '{chassis_name}' to reboot... elapsed={elapsed:.1f}s (result={result}, product_type='{buff.value.decode()}')")
             sleep(poll_interval)
             elapsed += poll_interval
         print(f"Timeout: '{chassis_name}' did not respond within {timeout}s")
